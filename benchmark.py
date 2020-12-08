@@ -1,13 +1,24 @@
 # Creating and using the automatic benchmark for suggestions.
 from collections import defaultdict
 from statistics import mean
-from typing import Callable, Set, Tuple
+from typing import Callable, Set, Tuple, List, Dict, Union
 
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 from tqdm import tqdm
 
 from analysis import read_dependencies, suggest_libraries, get_year
+
+
+def get_configs() -> List[Dict[str, Union[float, int]]]:
+    return [
+        {
+            'idf_power': idf_power,
+            'num_closest': num_closest
+        }
+        for idf_power in [-2, -1]
+        for num_closest in [1, 5, 10, 20, 50, 100, 200]
+    ]
 
 
 def create_diffs(file: str) -> None:
@@ -100,11 +111,12 @@ def run_benchmark(file: str, model: Callable) -> None:
         for line in fin:
             repo_full_name = line.rstrip().split(';')[0]
             benchmark[get_year(repo_full_name)].append(repo_full_name)
-
-    for idf_power in tqdm([0.4, 0.5, 0.6, 0.7, 0.75, 0.8, 0.9]):
-        with open(f"benchmark/results/{file}-{model.__name__}-{str(idf_power)}-results", "w+") as fout:
+    for config in tqdm(get_configs()):
+        idf_power = config['idf_power']
+        num_closest = config['num_closest']
+        with open(f"benchmark/results/{file}-{model.__name__}-{idf_power}-{num_closest}-results", "w+") as fout:
             for year, year_benchmark in benchmark.items():
-                results = model(file, year_benchmark, True, idf_power) # Get the predictions.
+                results = model(file, year_benchmark, True, config)  # Get the predictions.
                 for repo in results:
                     fout.write(f"{repo};{','.join([x[0] for x in results[repo]])}\n")
 
@@ -177,6 +189,9 @@ if __name__ == "__main__":
     # create_diffs("requirements_history.txt")
     # create_benchmark("requirements_history.txt")
     # baseline("requirements_history.txt")
-    run_benchmark("requirements_history.txt", suggest_libraries)
-    analyze_results("requirements_history.txt", "suggest_libraries-0.75")
+    # run_benchmark("requirements_history.txt", suggest_libraries)
+    # for config in get_configs():
+    #     print(f"Results for {config}")
+    #     print(analyze_results("requirements_history.txt", f"suggest_libraries-{config['idf_power']}-{config['num_closest']}"))
+    # print(analyze_results("requirements_history.txt", "baseline"))
     pass

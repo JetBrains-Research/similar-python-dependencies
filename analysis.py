@@ -4,7 +4,7 @@ from collections import Counter, defaultdict
 from math import log
 from operator import itemgetter
 import os
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -219,7 +219,7 @@ def print_closest(file: str, name: str, amount: int,
 
 
 def suggest_libraries(file: str, names: List[str], single_version: bool,
-                      idf_power: float) -> Dict[str, List[Tuple[str, float]]]:
+                      config: Dict[str, Union[float, int]]) -> Dict[str, List[Tuple[str, float]]]:
     """
     Given a list of query projects, suggests potential libraries for all of them.
     :param file: name of the file, not the full path.
@@ -237,18 +237,16 @@ def suggest_libraries(file: str, names: List[str], single_version: bool,
             idfs[data[0]] = float(data[1])
     suggestions = {}
     # Find the closest repos for all the repos (faster to do in bulk).
-    closest = predict_closest(file, names, 20, single_version, True)
+    closest = predict_closest(file, names, config['num_closest'], single_version, True)
 
     for name in names:  # Iterate over query repos.
-        libraries = {}
-        for repo in closest[name]:  # Iterate over the closest repos.
+        libraries = defaultdict(float)
+        for closest_ind, repo in enumerate(closest[name]):  # Iterate over the closest repos.
             for req in reqs[repo[0] + "/" + repo[1]]:  # Iterate over dependencies.
                 if req not in reqs[name]:  # Skip if the given requirement already in the query.
-                    if req not in libraries:
-                        # Cosine distance to repo * IDF of lib
-                        libraries[req] = repo[2] * (idfs[req] ** idf_power)
-                    else:
-                        libraries[req] += repo[2] * (idfs[req] ** idf_power)
+                    # Cosine distance to repo * IDF of lib
+                    libraries[req] += repo[2] * (idfs[req] ** config['idf_power'])
+
         # Sort the suggestions by their score.
         suggestions[name] = sorted(libraries.items(), key=itemgetter(1), reverse=True)
     return suggestions
@@ -418,8 +416,8 @@ def years_requirements(file: str) -> None:
 
 if __name__ == "__main__":
     # train_svd(file="requirements_history.txt")
-    print_closest(file="requirements_history.txt", name="FeeiCN_EXIF/2019-11-20",
-                  amount=10, single_version=True, filter_versions=True)
+    # print_closest(file="requirements_history.txt", name="FeeiCN_EXIF/2019-11-20",
+    #               amount=10, single_version=True, filter_versions=True)
     # print_libraries("requirements_history.txt", "AliShazly_sudoku-py/2020-11-19", True, 1, 10)
     # cluster_vectors(file="requirements_history.txt", algo="kmeans")
     # visualize_clusters(file="requirements_history.txt", mode="versions")

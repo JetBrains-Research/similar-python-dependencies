@@ -193,7 +193,7 @@ def predict_closest(file: str, names: List[str], amount: int, single_version: bo
                     repo_date,
                     dist
                 ))
-                if filter_versions:
+                if filter_versions and (not single_version):
                     banned.add(repo_name)
 
             if len(closest[query_repo_full_name]) >= amount:
@@ -245,10 +245,11 @@ def suggest_libraries(file: str, names: List[str], single_version: bool,
             for req in reqs[repo[0] + "/" + repo[1]]:  # Iterate over dependencies.
                 if req not in reqs[name]:  # Skip if the given requirement already in the query.
                     # Cosine distance to repo * IDF of lib
-                    libraries[req] += repo[2] * (idfs[req] ** config['idf_power'])
+                    libraries[req] += (idfs[req] ** config['idf_power']) * \
+                                      (repo[2] ** config['sim_power'])
 
         # Sort the suggestions by their score.
-        suggestions[name] = sorted(libraries.items(), key=itemgetter(1), reverse=True)
+        suggestions[name] = sorted(libraries.items(), key=itemgetter(1, 0), reverse=True)
     return suggestions
 
 
@@ -400,15 +401,14 @@ def years_requirements(file: str) -> None:
     """
     reqs = read_dependencies(file)
     # Compile a dictionary {year: [depenencies]}
-    years = {}
+    years = defaultdict(list)
     for repo in reqs:
         year = repo.split("/")[1]
-        if year not in years:
-            years[year] = []
         years[year].extend(reqs[repo])
-    # Transform the lists into the Counters and pront them.
+    # Transform the lists into the Counters and print them.
     for year in years:
-        years[year] = [x[0] for x in sorted(Counter(years[year]).items(), key=itemgetter(1), reverse=True)]
+        years[year] = [x[0] for x in sorted(Counter(years[year]).items(),
+                                            key=itemgetter(1, 0), reverse=True)]
     with open(f"dynamics/{file}_years", "w+") as fout:
         for year in years:
             fout.write(f"{year};{','.join(years[year])}\n")

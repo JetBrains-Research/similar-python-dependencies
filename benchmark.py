@@ -14,10 +14,12 @@ def get_configs() -> List[Dict[str, Union[float, int]]]:
     return [
         {
             'idf_power': idf_power,
+            'sim_power': sim_power,
             'num_closest': num_closest
         }
-        for idf_power in [-2, -1]
-        for num_closest in [1, 5, 10, 20, 50, 100, 200]
+        for idf_power in [0]
+        for sim_power in [0]
+        for num_closest in [10000]
     ]
 
 
@@ -113,8 +115,10 @@ def run_benchmark(file: str, model: Callable) -> None:
             benchmark[get_year(repo_full_name)].append(repo_full_name)
     for config in tqdm(get_configs()):
         idf_power = config['idf_power']
+        sim_power = config['sim_power']
         num_closest = config['num_closest']
-        with open(f"benchmark/results/{file}-{model.__name__}-{idf_power}-{num_closest}-results", "w+") as fout:
+        with open(f"benchmark/results/{file}-{model.__name__}-"
+                  f"{idf_power}-{sim_power}-{num_closest}-results", "w+") as fout:
             for year, year_benchmark in benchmark.items():
                 results = model(file, year_benchmark, True, config)  # Get the predictions.
                 for repo in results:
@@ -192,6 +196,9 @@ if __name__ == "__main__":
     # run_benchmark("requirements_history.txt", suggest_libraries)
     # for config in get_configs():
     #     print(f"Results for {config}")
-    #     print(analyze_results("requirements_history.txt", f"suggest_libraries-{config['idf_power']}-{config['num_closest']}"))
-    # print(analyze_results("requirements_history.txt", "baseline"))
+    #     print(analyze_results("requirements_history.txt", f"suggest_libraries"
+    #                                                       f"-{config['idf_power']}-"
+    #                                                       f"{config['sim_power']}-"
+    #                                                       f"{config['num_closest']}"))
+    # (analyze_results("requirements_history.txt", "suggest_libraries-old_baseline"))
     pass

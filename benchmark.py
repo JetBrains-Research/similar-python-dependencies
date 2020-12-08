@@ -1,5 +1,5 @@
 # Creating and using the automatic benchmark for suggestions.
-
+from collections import defaultdict
 from statistics import mean
 from typing import Callable, Set, Tuple
 
@@ -7,7 +7,7 @@ import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 from tqdm import tqdm
 
-from analysis import read_dependencies, suggest_libraries
+from analysis import read_dependencies, suggest_libraries, get_year
 
 
 def create_diffs(file: str) -> None:
@@ -95,17 +95,18 @@ def run_benchmark(file: str, model: Callable) -> None:
     :param model: the model that suggests libraries.
     :return: None.
     """
-    benchmark = []
+    benchmark = defaultdict(list)
     with open(f"benchmark/{file}_benchmark") as fin: # Load the benchmark.
         for line in fin:
-            benchmark.append(line.rstrip().split(";")[0])
-    benchmark = sorted(list(benchmark))
-    for idf_power in [0.4, 0.5, 0.6, 0.7, 0.8, 0.9]:
-        results = model(file, benchmark, True, idf_power) # Get the predictions.
-        with open(f"benchmark/results/{file}-{model.__name__}-{str(idf_power)}-results",
-                  "w+") as fout: # Save the results to file.
-            for repo in results:
-                fout.write(f"{repo};{','.join([x[0] for x in results[repo]])}\n")
+            repo_full_name = line.rstrip().split(';')[0]
+            benchmark[get_year(repo_full_name)].append(repo_full_name)
+
+    for idf_power in tqdm([0.4, 0.5, 0.6, 0.7, 0.75, 0.8, 0.9]):
+        with open(f"benchmark/results/{file}-{model.__name__}-{str(idf_power)}-results", "w+") as fout:
+            for year, year_benchmark in benchmark.items():
+                results = model(file, year_benchmark, True, idf_power) # Get the predictions.
+                for repo in results:
+                    fout.write(f"{repo};{','.join([x[0] for x in results[repo]])}\n")
 
 
 def analyze_results(file: str, model_name: str) -> None:
@@ -176,6 +177,6 @@ if __name__ == "__main__":
     # create_diffs("requirements_history.txt")
     # create_benchmark("requirements_history.txt")
     # baseline("requirements_history.txt")
-    # run_benchmark("requirements_history.txt", suggest_libraries)
-    # analyze_results("requirements_history.txt", "suggest_libraries-0.9")
+    run_benchmark("requirements_history.txt", suggest_libraries)
+    analyze_results("requirements_history.txt", "suggest_libraries-0.75")
     pass

@@ -1,6 +1,6 @@
 # Processing raw data, building and training models, suggesting closest projects.
 
-from collections import Counter
+from collections import Counter, defaultdict
 from math import log
 from operator import itemgetter
 import os
@@ -9,11 +9,11 @@ from typing import Dict, List, Tuple
 import matplotlib.pyplot as plt
 import numpy as np
 import requirements
+import faiss
 from sklearn.decomposition import TruncatedSVD
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.cluster import DBSCAN, KMeans
 from sklearn.manifold import TSNE
-from tqdm import tqdm
 
 
 def process_sources() -> None:
@@ -84,9 +84,9 @@ def train_svd(file: str) -> None:
         for req in reqs[repo]:
             dependency_list.append(req)
 
-    repos_list = list(reqs.keys()) # List of the projects, ordered by versions
+    repos_list = list(reqs.keys())  # List of the projects, ordered by versions
     dependency_counter = sorted(Counter(dependency_list).items(), key=itemgetter(1), reverse=True)
-    dependency_list = sorted(list(set(dependency_list))) # List of the dependencies
+    dependency_list = sorted(list(set(dependency_list)))  # List of the dependencies
 
     print(f"There are a total of {len(repos_list)} repositories "
           f"and {len(dependency_list)} dependencies.")
@@ -112,8 +112,28 @@ def train_svd(file: str) -> None:
     with open(f"models/{file}_dependencies", "w+") as fout:
         for dependency in dependency_counter:
             fout.write(f"{dependency[0]};"
-                       f"{round(log(len(repos_list)/dependency[1]), 3)}\n")
+                       f"{round(log(len(repos_list) / dependency[1]), 3)}\n")
     print(f"SVD trained and saved. The new shape of the matrix is {new_matrix.shape}.")
+
+
+def build_index(data: np.ndarray) -> faiss.IndexFlatIP:
+    _, dim = data.shape
+    faiss.normalize_L2(data)
+    index = faiss.index_factory(dim, "Flat", faiss.METRIC_INNER_PRODUCT)
+    index.add(data)
+    return index
+
+
+def get_name(repo_name: str) -> str:
+    return repo_name.split('/')[0]
+
+
+def get_date(repo_name: str) -> str:
+    return repo_name.split('/')[-1]
+
+
+def get_year(repo_name: str) -> str:
+    return get_date(repo_name).split('-')[0]
 
 
 def predict_closest(file: str, names: List[str], amount: int, single_version: bool,
@@ -129,45 +149,56 @@ def predict_closest(file: str, names: List[str], amount: int, single_version: bo
     :return: dictionary {repo: [(close_repo, version, similarity), ...]}.
     """
     data = np.load(f"models/{file}.npy")
+    data = data.astype(np.float32)
     repos_list = []
     with open(f"models/{file}_repos") as fin:
         for line in fin:
             repos_list.append(line.rstrip())
-    closest = {}
-    print("Searching for the closest repos...")
+    repos_list = np.array(repos_list)
+
+    if single_version:
+        target_year = get_year(names[0])
+        picked_repos = [
+            i
+            for i, repo_name in enumerate(repos_list)
+            if get_year(repo_name) == target_year
+        ]
+        data = data[picked_repos]
+        repos_list = repos_list[picked_repos]
+
+    index = build_index(data)
+
+    closest = defaultdict(list)
+
+    # Build query embeddings of query projects
+    query_indices = [np.where(repos_list == name)[0][0] for name in names]
+    query_embedding = data[query_indices]
+    faiss.normalize_L2(query_embedding)
+    all_distances, all_indices = index.search(query_embedding, len(data))
+
     # Iterating over query projects.
-    for name in tqdm(names):
-        target_vector = data[repos_list.index(name)]
-        cosines = []
-        # Iterating over all the repos.
-        for index_repo, vector in enumerate(data):
-            if repos_list[index_repo].split("/")[0] == name.split("/")[0]:
-                continue # Skip the query repo itself.
-            if single_version is True:
-                if repos_list[index_repo].split("/")[1] != name.split("/")[1]:
-                    continue # Skip other versions.
-            # Calculate and store the similarity.
-            similarity = cosine_similarity([target_vector], [vector])
-            cosines.append([repos_list[index_repo].split("/")[0],
-                            repos_list[index_repo].split("/")[1],
-                            similarity[0][0]])
-        max_cosines = sorted(cosines, key=itemgetter(2), reverse=True)
-        # Since we don't know, which version of each repo is the closest,
-        # this filtering is done post-factum.
-        if (single_version is False) and (filter_versions is True):
-            processed_repos = set()
-            filtered_max_cosines = []
-            for repo in max_cosines:
-                # Skip the query repo itself.
-                if repo[0] == name.split("/")[0]:
-                    continue
-                else:
-                    if repo[0] not in processed_repos:
-                        # Only save the closest version and skip all the rest.
-                        filtered_max_cosines.append(repo)
-                        processed_repos.add(repo[0])
-            max_cosines = filtered_max_cosines
-        closest[name] = max_cosines[:amount]
+    for query_ind, distances, indices in zip(query_indices, all_distances, all_indices):
+        # Post-process all the repos.
+        query_repo_full_name = repos_list[query_ind]
+        query_repo_name = get_name(query_repo_full_name)
+
+        banned = {query_repo_name}
+        for dist, ind in zip(distances, indices):
+            repo_full_name = repos_list[ind]
+            repo_name = get_name(repo_full_name)
+            repo_date = get_date(repo_full_name)
+            if repo_name not in banned:
+                closest[query_repo_full_name].append((
+                    repo_name,
+                    repo_date,
+                    dist
+                ))
+                if filter_versions:
+                    banned.add(repo_name)
+
+            if len(closest[query_repo_full_name]) >= amount:
+                break
+
     return closest
 
 
@@ -207,12 +238,12 @@ def suggest_libraries(file: str, names: List[str], single_version: bool,
     suggestions = {}
     # Find the closest repos for all the repos (faster to do in bulk).
     closest = predict_closest(file, names, 20, single_version, True)
-    print("Analyzing libraries of the closest repos...")
-    for name in tqdm(names): # Iterate over query repos.
+
+    for name in names:  # Iterate over query repos.
         libraries = {}
-        for repo in closest[name]: # Iterate over the closest repos.
-            for req in reqs[repo[0] + "/" + repo[1]]: # Iterate over dependencies.
-                if req not in reqs[name]: # Skip if the given requirement already in the query.
+        for repo in closest[name]:  # Iterate over the closest repos.
+            for req in reqs[repo[0] + "/" + repo[1]]:  # Iterate over dependencies.
+                if req not in reqs[name]:  # Skip if the given requirement already in the query.
                     if req not in libraries:
                         # Cosine distance to repo * IDF of lib
                         libraries[req] = repo[2] * (idfs[req] ** idf_power)
@@ -335,8 +366,8 @@ def analyze_pilgrims(file: str, n_show: int) -> None:
 
     adjacent_distances = []
     poles_distances = []
-    for repo in repos_dict: # Iterate over repositories.
-        if len(repos_dict[repo]) != 1: # Skip repo if it only has 1 version (no dynamics).
+    for repo in repos_dict:  # Iterate over repositories.
+        if len(repos_dict[repo]) != 1:  # Skip repo if it only has 1 version (no dynamics).
             # Iterate over all the adjacent versions.
             for version in range(1, len(repos_dict[repo])):
                 vector_before = data[repos.index(f"{repo}/{repos_dict[repo][version - 1]}")]
@@ -387,8 +418,8 @@ def years_requirements(file: str) -> None:
 
 if __name__ == "__main__":
     # train_svd(file="requirements_history.txt")
-    # print_closest(file="requirements_history.txt", name="FeeiCN_EXIF/2019-11-20",
-    #               amount=10, single_version=True, filter_versions=True)
+    print_closest(file="requirements_history.txt", name="FeeiCN_EXIF/2019-11-20",
+                  amount=10, single_version=True, filter_versions=True)
     # print_libraries("requirements_history.txt", "AliShazly_sudoku-py/2020-11-19", True, 1, 10)
     # cluster_vectors(file="requirements_history.txt", algo="kmeans")
     # visualize_clusters(file="requirements_history.txt", mode="versions")

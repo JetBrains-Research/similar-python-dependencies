@@ -207,7 +207,7 @@ def print_closest(file: str, name: str, amount: int,
     """
     Run the `predict_closest` function and print the results.
     :param file: name of the file, not the full path.
-    :param names: a list of full repo names that must be searched.
+    :param name: full repo name that must be searched.
     :param amount: number of the closest repos to find for each query project.
     :param single_version: if True, will only consider the repos of the same version as query.
     :param filter_versions: if True, only the closest version of any repo will be in the output.
@@ -225,7 +225,7 @@ def suggest_libraries(file: str, names: List[str], single_version: bool,
     :param file: name of the file, not the full path.
     :param names: a list of full repo names that must be searched.
     :param single_version: if True, will only consider the repos of the same version as query.
-    :param idf_power: the power of IDF in the recommendation formula.
+    :param config: the power of IDF in the recommendation formula.
     :return: dictionary {repo: [(suggestion, count), ...]}.
     """
     # Upload the dependencies and their IDFs.
@@ -246,7 +246,7 @@ def suggest_libraries(file: str, names: List[str], single_version: bool,
                 if req not in reqs[name]:  # Skip if the given requirement already in the query.
                     # Cosine distance to repo * IDF of lib
                     libraries[req] += (idfs[req] ** config['idf_power']) * \
-                                      (repo[2] ** config['sim_power'])
+                                      (((repo[2] + 1) / 2) ** config['sim_power'])
 
         # Sort the suggestions by their score.
         suggestions[name] = sorted(libraries.items(), key=itemgetter(1, 0), reverse=True)
@@ -254,18 +254,18 @@ def suggest_libraries(file: str, names: List[str], single_version: bool,
 
 
 def print_libraries(file: str, name: str, single_version: bool,
-                    idf_power: float, n_suggest: int) -> None:
+                    config: Dict[str, Union[float, int]], n_suggest: int) -> None:
     """
     Run the `suggest_libraries` function and print the result.
     :param file: name of the file, not the full path.
-    :param names: a list of full repo names that must be searched.
+    :param name: full repo name that must be searched.
     :param single_version: if True, will only consider the repos of the same version as query.
-    :param idf_power: the power of IDF in the recommendation formula.
+    :param config: the power of IDF in the recommendation formula.
     :param n_suggest: number of top libraries to suggest.
     :return: None.
     """
     reqs = read_dependencies(file)
-    suggestions = suggest_libraries(file, [name], single_version, idf_power)[name][:n_suggest]
+    suggestions = suggest_libraries(file, [name], single_version, config)[name][:n_suggest]
     print(f"Repo name: {name}\n"
           f"Repo dependencies: {', '.join(reqs[name])}\n\n"
           f"Suggestions:\n")
@@ -417,7 +417,7 @@ def years_requirements(file: str) -> None:
 if __name__ == "__main__":
     # train_svd(file="requirements_history.txt")
     # print_closest(file="requirements_history.txt", name="FeeiCN_EXIF/2019-11-20",
-    #               amount=10, single_version=True, filter_versions=True)
+    #               amount=10000, single_version=True, filter_versions=True)
     # print_libraries("requirements_history.txt", "AliShazly_sudoku-py/2020-11-19", True, 1, 10)
     # cluster_vectors(file="requirements_history.txt", algo="kmeans")
     # visualize_clusters(file="requirements_history.txt", mode="versions")

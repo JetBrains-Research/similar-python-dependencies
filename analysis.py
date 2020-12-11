@@ -52,31 +52,31 @@ def process_sources() -> None:
                             continue
 
 
-def read_dependencies(file: str) -> Dict[str, List[str]]:
+def read_dependencies() -> Dict[str, List[str]]:
     """
     Read the file with the dependencies and return a dictionary with repos as keys
     and lists of their dependencies as values. Automatically considers the lower- and upppercase,
     and exchanges "-" to "_".
-    :param file: name of the file, not the full path.
     :return: dictionary {repo: [dependencies], ...}
     """
     reqs = {}
-    with open(f"processed/{file}") as fin:
+    with open(f"processed/requirements_history.txt") as fin:
         for line in fin:
             data = line.rstrip().split(";")
             reqs[data[0]] = [req.split(":")[0].lower().replace("-", "_") for req in data[1].split(",")]
     return reqs
 
 
-def train_svd(file: str) -> None:
+def train_svd(file: str, libraries: bool) -> None:
     """
     Create a project-dependencies matrix and train an SVD (singular vector decomposition)
     that will transform the lines into 32-metric embeddings.
     :param file: name of the file, not the full path.
+    :param libraries: if True, will create embeddings of libraries by projects.
     :return: None.
     """
     # Get the dictionary from projects to dependencies.
-    reqs = read_dependencies(file)
+    reqs = read_dependencies()
 
     # Get the list of all the dependencies.
     dependency_list = []
@@ -100,16 +100,35 @@ def train_svd(file: str) -> None:
         for req in reqs[repo]:
             matrix[index_repo, dependency_list.index(req)] = 1
 
-    # Train an SVD, transform the matrix, and save it.
     svd = TruncatedSVD(n_components=32, n_iter=7)
-    new_matrix = svd.fit_transform(matrix)
-    np.save(f"models/{file}", new_matrix)
+
+    if libraries is True:
+        name = "libraries_of_" + file
+        matrix = np.transpose(matrix)
+        print(f"The shape of the transposed matrix is {matrix.shape}.")
+        libraries_matrix = svd.fit_transform(matrix)
+        print(f"The shape of the SVD matrix is {libraries_matrix.shape}.")
+        new_matrix = []
+        for repo in repos_list:
+            repo_vectors = []
+            for req in reqs[repo]:
+                repo_vectors.append(libraries_matrix[dependency_list.index(req)])
+            new_matrix.append(np.average(repo_vectors, axis=0))
+        new_matrix = np.array(new_matrix)
+        np.save(f"models/{name}", new_matrix)
+
+    else:
+        name = file
+        new_matrix = svd.fit_transform(matrix)
+        np.save(f"models/{name}", new_matrix)
+
     # Save the list of projects in correct order.
-    with open(f"models/{file}_repos", "w+") as fout:
+    with open(f"models/{name}_repos", "w+") as fout:
         for repo in repos_list:
             fout.write(f"{repo}\n")
+
     # Save the IDFs of the dependencies.
-    with open(f"models/{file}_dependencies", "w+") as fout:
+    with open(f"models/{name}_dependencies", "w+") as fout:
         for dependency in dependency_counter:
             fout.write(f"{dependency[0]};"
                        f"{round(log(len(repos_list) / dependency[1]), 3)}\n")
@@ -229,7 +248,7 @@ def suggest_libraries(file: str, names: List[str], single_version: bool,
     :return: dictionary {repo: [(suggestion, count), ...]}.
     """
     # Upload the dependencies and their IDFs.
-    reqs = read_dependencies(file)
+    reqs = read_dependencies()
     idfs = {}
     with open(f"models/{file}_dependencies") as fin:
         for line in fin:
@@ -264,7 +283,7 @@ def print_libraries(file: str, name: str, single_version: bool,
     :param n_suggest: number of top libraries to suggest.
     :return: None.
     """
-    reqs = read_dependencies(file)
+    reqs = read_dependencies()
     suggestions = suggest_libraries(file, [name], single_version, config)[name][:n_suggest]
     print(f"Repo name: {name}\n"
           f"Repo dependencies: {', '.join(reqs[name])}\n\n"
@@ -399,7 +418,7 @@ def years_requirements(file: str) -> None:
     :param file: name of the file, not the full path.
     :return: None.
     """
-    reqs = read_dependencies(file)
+    reqs = read_dependencies()
     # Compile a dictionary {year: [depenencies]}
     years = defaultdict(list)
     for repo in reqs:
@@ -415,10 +434,11 @@ def years_requirements(file: str) -> None:
 
 
 if __name__ == "__main__":
-    # train_svd(file="requirements_history.txt")
+    # train_svd(file="requirements_history.txt", libraries=True)
     # print_closest(file="requirements_history.txt", name="RyanBalfanz_django-sendgrid/2012-11-21",
-    #               amount=20, single_version=True, filter_versions=True)
-    # print_libraries("requirements_history.txt", "AliShazly_sudoku-py/2020-11-19", True, 1, 10)
+    #               amount=20, single_version=False, filter_versions=False)
+    # print_libraries("libraries_of_requirements_history.txt", "AliShazly_sudoku-py/2020-11-19", True,
+    #                 {"idf_power": -1, "sim_power": 1.5, "num_closest": 500}, 10)
     # cluster_vectors(file="requirements_history.txt", algo="kmeans")
     # visualize_clusters(file="requirements_history.txt", mode="versions")
     # analyze_pilgrims(file="requirements_history.txt", n_show=10)

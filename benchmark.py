@@ -48,7 +48,7 @@ def create_diffs(file: str) -> None:
         else:
             repos_dict[r_v[0]].append(r_v[1])
 
-    with open(f"benchmark/{file}_diffs", "w+") as fout:
+    with open(f"benchmark/requirements_history.txt_diffs", "w+") as fout:
         for repo in tqdm(repos_dict): # Iterate over repos.
             if len(repos_dict[repo]) != 1:
                 for version in range(1, len(repos_dict[repo])):
@@ -70,7 +70,8 @@ def create_benchmark(file: str) -> None:
     :param file: name of the file, not the full path.
     :return: None.
     """
-    with open(f"benchmark/{file}_diffs") as fin, open(f"benchmark/{file}_benchmark", "w+") as fout:
+    with open(f"benchmark/requirements_history.txt_diffs") as fin,\
+            open(f"benchmark/requirements_history.txt_benchmark", "w+") as fout:
         for line in tqdm(fin):
             # Read the `diff` file.
             data = line.rstrip().split(";")
@@ -91,7 +92,7 @@ def run_benchmark(file: str, model: Callable) -> None:
     :return: None.
     """
     benchmark = defaultdict(list)
-    with open(f"benchmark/{file}_benchmark") as fin: # Load the benchmark.
+    with open(f"benchmark/requirements_history.txt_benchmark") as fin: # Load the benchmark.
         for line in fin:
             repo_full_name = line.rstrip().split(';')[0]
             benchmark[get_year(repo_full_name)].append(repo_full_name)
@@ -149,7 +150,7 @@ def analyze_results(file: str) -> None:
     :return: None.
     """
     benchmark = {} # Upload the benchmark.
-    with open(f"benchmark/{file}_benchmark") as fin:
+    with open(f"benchmark/requirements_history.txt_benchmark") as fin:
         for line in fin:
             data = line.rstrip().split(";")
             benchmark[data[0]] = data[1].split(",")
@@ -219,17 +220,17 @@ def get_baseline(file: str) -> None:
     :return: None.
     """
     benchmark = {}
-    with open(f"benchmark/{file}_benchmark") as fin: # Load the benchmark.
+    with open(f"benchmark/requirements_history.txt_benchmark") as fin: # Load the benchmark.
         for line in fin:
             benchmark[line.rstrip().split(";")[0]] = line.rstrip().split(";")[1].split(",")
     reqs = read_dependencies(file)
     years = {}
-    with open(f"dynamics/{file}_years") as fin: # Load the most popular libraries.
+    with open(f"dynamics/requirements_history.txt_years") as fin: # Load the most popular libraries.
         for line in fin:
             data = line.rstrip().split(";")
             years[data[0]] = data[1].split(",")
     baseline = {}
-    with open(f"benchmark/results/{file}-baseline-results", "w+") as fout: # Save the predictions.
+    with open(f"benchmark/results/requirements_history.txt-baseline-results", "w+") as fout: # Save the predictions.
         for repo in tqdm(benchmark):
             baseline[repo] = [req for req in years[repo.split('/')[1]] if req not in reqs[repo]]
     precision, recall, found = defaultdict(list), defaultdict(list), defaultdict(list)
@@ -290,7 +291,7 @@ def visualize_benchmark(model_name: str,
 
 def study_classes(file: str) -> None:
     benchmark = {}
-    with open(f"benchmark/{file}_benchmark") as fin:  # Load the benchmark.
+    with open(f"benchmark/requirements_history.txt_benchmark") as fin:  # Load the benchmark.
         for line in fin:
             benchmark[line.rstrip().split(";")[0]] = line.rstrip().split(";")[1].split(",")
     model_name_0 = f"suggest_libraries--1-0-10000"
@@ -331,8 +332,8 @@ if __name__ == "__main__":
     # create_diffs("requirements_history.txt")
     # create_benchmark("requirements_history.txt")
     # get_baseline("requirements_history.txt")
-    # run_benchmark("requirements_history.txt", suggest_libraries)
-    # analyze_results("requirements_history.txt")
+    # run_benchmark("libraries_of_requirements_history.txt", suggest_libraries)
+    # analyze_results("libraries_of_requirements_history.txt")
     # visualize_benchmark(model_name="suggest_libraries",
     #                     varied_hyperparameters = ["idf_power", "num_closest"],
     #                     static_hyperparameters = {"sim_power": 1.5},

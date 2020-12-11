@@ -416,8 +416,8 @@ def years_requirements(file: str) -> None:
 
 if __name__ == "__main__":
     # train_svd(file="requirements_history.txt")
-    # print_closest(file="requirements_history.txt", name="FeeiCN_EXIF/2019-11-20",
-    #               amount=10000, single_version=True, filter_versions=True)
+    # print_closest(file="requirements_history.txt", name="RyanBalfanz_django-sendgrid/2012-11-21",
+    #               amount=20, single_version=True, filter_versions=True)
     # print_libraries("requirements_history.txt", "AliShazly_sudoku-py/2020-11-19", True, 1, 10)
     # cluster_vectors(file="requirements_history.txt", algo="kmeans")
     # visualize_clusters(file="requirements_history.txt", mode="versions")

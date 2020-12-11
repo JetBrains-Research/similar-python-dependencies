@@ -249,10 +249,11 @@ def get_baseline(file: str) -> None:
     print(f"MRR{round(mean(mrrs), 4)}")
 
 
-def visualize_benchmark(varied_hyperparameters: List[str],
+def visualize_benchmark(model_name: str,
+                        varied_hyperparameters: List[str],
                         static_hyperparameters: Dict[str, float],
                         metric: str) -> None:
-    results = pd.read_csv("benchmark/analysis/suggest_libraries.csv", index_col=0)
+    results = pd.read_csv(f"benchmark/analysis/{model_name}.csv", index_col=0)
     metric_max = results[metric].max()
     if len(varied_hyperparameters) == 2:
         filtered_results = results[results[list(static_hyperparameters.keys())[0]]
@@ -274,6 +275,16 @@ def visualize_benchmark(varied_hyperparameters: List[str],
         ax.set(xlabel = varied_hyperparameters[1], ylabel = varied_hyperparameters[0])
         plt.title(f"{metric} for {list(static_hyperparameters.keys())[0]} = "
                   f"{list(static_hyperparameters.values())[0]}")
+        plt.show()
+    elif len(varied_hyperparameters) == 1:
+        filtered_results = results[(results[list(static_hyperparameters.keys())[0]]
+                                   == list(static_hyperparameters.values())[0]) &
+                                   (results[list(static_hyperparameters.keys())[1]]
+                                    == list(static_hyperparameters.values())[1])][[
+            varied_hyperparameters[0], metric]].melt(varied_hyperparameters[0], var_name='cols', value_name=metric)
+        sns.factorplot(data=filtered_results, x=varied_hyperparameters[0], y=metric)
+        #plt.ylim(0, metric_max)
+        plt.xticks(rotation=90)
         plt.show()
 
 
@@ -322,8 +333,9 @@ if __name__ == "__main__":
     # get_baseline("requirements_history.txt")
     # run_benchmark("requirements_history.txt", suggest_libraries)
     # analyze_results("requirements_history.txt")
-    # visualize_benchmark(varied_hyperparameters = ["sim_power", "num_closest"],
-    #                     static_hyperparameters = {"idf_power": -1},
-    #                     metric="f3")
+    # visualize_benchmark(model_name="suggest_libraries",
+    #                     varied_hyperparameters = ["idf_power", "num_closest"],
+    #                     static_hyperparameters = {"sim_power": 1.5},
+    #                     metric="mrr")
     # study_classes("requirements_history.txt")
     pass

@@ -103,7 +103,7 @@ def run_benchmark(file: str, model: Callable) -> None:
         with open(f"benchmark/results/{file}-{model.__name__}-"
                   f"{idf_power}-{sim_power}-{num_closest}-results", "w+") as fout:
             for year, year_benchmark in benchmark.items():
-                results = model(file, year_benchmark, True, config)  # Get the predictions.
+                results = model(file, year_benchmark, True, False, config)  # Get the predictions.
                 for repo in results:
                     fout.write(f"{repo};{','.join([x[0] for x in results[repo]])}\n")
 
@@ -334,9 +334,9 @@ if __name__ == "__main__":
     # get_baseline("requirements_history.txt")
     # run_benchmark("libraries_of_requirements_history.txt", suggest_libraries)
     # analyze_results("libraries_of_requirements_history.txt")
-    # visualize_benchmark(model_name="suggest_libraries",
-    #                     varied_hyperparameters = ["idf_power", "num_closest"],
-    #                     static_hyperparameters = {"sim_power": 1.5},
+    # visualize_benchmark(model_name="libraries_of_requirements_AWS",
+    #                     varied_hyperparameters = ["sim_power", "num_closest"],
+    #                     static_hyperparameters = {"idf_power": -1},
     #                     metric="mrr")
     # study_classes("requirements_history.txt")
     pass

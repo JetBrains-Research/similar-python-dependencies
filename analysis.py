@@ -248,13 +248,15 @@ def predict_closest(file: str, names: List[str], amount: int, single_version: bo
             repo_date = get_date(name)
             banned = {repo_name}
             for candidate in lst:
+                if candidate[1] == 1:
+                    continue # Skip exactly the same cases, they are of no interest
                 candidate_name = get_name(candidate[0])
                 candidate_date = get_date(candidate[0])
                 if single_version and (repo_date != candidate_date):
                     continue
                 if candidate_name in banned:
                     continue
-                closest[repo_name].append((
+                closest[name].append((
                     candidate_name,
                     candidate_date,
                     candidate[1]
@@ -485,9 +487,9 @@ if __name__ == "__main__":
     # jaccard_distance(file="requirements_history.txt")
     # train_svd(file="requirements_history.txt", libraries=True)
     # print_closest(file="requirements_history.txt", name="RyanBalfanz_django-sendgrid/2012-11-21",
-    #               amount=20, single_version=True, filter_versions=True, jaccard=False)
-    print_libraries("libraries_of_requirements_history.txt", "AliShazly_sudoku-py/2020-11-19",
-                    True, False, {"idf_power": -1, "sim_power": 1.5, "num_closest": 500}, 10)
+    #               amount=20, single_version=True, filter_versions=True, jaccard=True)
+    # print_libraries("requirements_history.txt", "RyanBalfanz_django-sendgrid/2012-11-21",
+    #                 True, True, {"idf_power": -1, "sim_power": 1.5, "num_closest": 1}, 10)
     # cluster_vectors(file="requirements_history.txt", algo="kmeans")
     # visualize_clusters(file="requirements_history.txt", mode="versions")
     # analyze_pilgrims(file="requirements_history.txt", n_show=10)

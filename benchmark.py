@@ -20,8 +20,8 @@ def get_configs() -> List[Dict[str, Union[float, int]]]:
             'sim_power': sim_power,
             'num_closest': num_closest
         }
-        for idf_power in [-3, -2, -1, 0, 1, 2]
-        for sim_power in [0, 0.5, 1, 1.5]
+        for idf_power in [-2, -1, 0]
+        for sim_power in [0, 1, 1.5]
         for num_closest in [1, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000]
     ]
 
@@ -101,9 +101,9 @@ def run_benchmark(file: str, model: Callable) -> None:
         sim_power = config['sim_power']
         num_closest = config['num_closest']
         with open(f"benchmark/results/{file}-{model.__name__}-"
-                  f"{idf_power}-{sim_power}-{num_closest}-results", "w+") as fout:
+                  f"{idf_power}-{sim_power}-{num_closest}-True-results", "w+") as fout:
             for year, year_benchmark in benchmark.items():
-                results = model(file, year_benchmark, True, False, config)  # Get the predictions.
+                results = model(file, year_benchmark, True, True, config)  # Get the predictions.
                 for repo in results:
                     fout.write(f"{repo};{','.join([x[0] for x in results[repo]])}\n")
 
@@ -186,7 +186,7 @@ def analyze_results(file: str) -> None:
         analysis_results["sim_power"].append(sim_power)
         analysis_results["num_closest"].append(num_closest)
 
-        model_name = f"suggest_libraries-{idf_power}-{sim_power}-{num_closest}"
+        model_name = f"suggest_libraries-{idf_power}-{sim_power}-{num_closest}-True"
         results = {} # Upload the prediction.
         with open(f"benchmark/results/{file}-{model_name}-results") as fin:
             for line in fin:
@@ -332,8 +332,8 @@ if __name__ == "__main__":
     # create_diffs("requirements_history.txt")
     # create_benchmark("requirements_history.txt")
     # get_baseline("requirements_history.txt")
-    # run_benchmark("libraries_of_requirements_history.txt", suggest_libraries)
-    # analyze_results("libraries_of_requirements_history.txt")
+    # run_benchmark("requirements_history.txt", suggest_libraries)
+    # analyze_results("requirements_history.txt")
     # visualize_benchmark(model_name="libraries_of_requirements_AWS",
     #                     varied_hyperparameters = ["sim_power", "num_closest"],
     #                     static_hyperparameters = {"idf_power": -1},

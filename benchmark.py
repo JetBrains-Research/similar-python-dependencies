@@ -334,9 +334,9 @@ if __name__ == "__main__":
     # get_baseline("requirements_history.txt")
     # run_benchmark("requirements_history.txt", suggest_libraries)
     # analyze_results("requirements_history.txt")
-    # visualize_benchmark(model_name="libraries_of_requirements_AWS",
-    #                     varied_hyperparameters = ["sim_power", "num_closest"],
-    #                     static_hyperparameters = {"idf_power": -1},
-    #                     metric="mrr")
+    visualize_benchmark(model_name="suggest_libraries_jaccard",
+                        varied_hyperparameters = ["idf_power", "num_closest"],
+                        static_hyperparameters = {"sim_power": 1.5},
+                        metric="mrr")
     # study_classes("requirements_history.txt")
     pass

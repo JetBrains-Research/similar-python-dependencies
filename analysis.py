@@ -126,6 +126,8 @@ def train_svd(file: str, libraries: bool) -> None:
         print(f"The shape of the transposed matrix is {matrix.shape}.")
         libraries_matrix = svd.fit_transform(matrix)
         print(f"The shape of the SVD matrix is {libraries_matrix.shape}.")
+        np.save(f"models/{name}_libraries", libraries_matrix)
+        np.savetxt(f"models/{name}_libraries.csv", libraries_matrix, delimiter=",")
         new_matrix = []
         for repo in repos_list:
             repo_vectors = []
@@ -135,6 +137,9 @@ def train_svd(file: str, libraries: bool) -> None:
         new_matrix = np.array(new_matrix)
         np.save(f"models/{name}", new_matrix)
         np.savetxt(f"models/{name}.csv", new_matrix, delimiter=",")
+        with open(f"models/{name}_dependencies", "w+") as fout:
+            for dependency in dependency_list:
+                fout.write(f"{dependency}\n")
     else:
         name = file
         new_matrix = svd.fit_transform(matrix)
@@ -147,7 +152,7 @@ def train_svd(file: str, libraries: bool) -> None:
             fout.write(f"{repo}\n")
 
     # Save the IDFs of the dependencies.
-    with open(f"models/{name}_dependencies", "w+") as fout:
+    with open(f"models/{name}_idfs", "w+") as fout:
         for dependency in dependency_counter:
             fout.write(f"{dependency[0]};"
                        f"{round(log(len(repos_list) / dependency[1]), 3)}\n")
@@ -299,7 +304,7 @@ def suggest_libraries(file: str, names: List[str], single_version: bool, jaccard
     # Upload the dependencies and their IDFs.
     reqs = read_dependencies()
     idfs = {}
-    with open(f"models/{file}_dependencies") as fin:
+    with open(f"models/{file}_idfs") as fin:
         for line in fin:
             data = line.rstrip().split(";")
             idfs[data[0]] = float(data[1])
@@ -485,13 +490,13 @@ def years_requirements(file: str) -> None:
 
 if __name__ == "__main__":
     # jaccard_distance(file="requirements_history.txt")
-    # train_svd(file="requirements_history.txt", libraries=True)
+    # train_svd(file="requirements_history.txt", libraries=False)
     # print_closest(file="requirements_history.txt", name="RyanBalfanz_django-sendgrid/2012-11-21",
     #               amount=20, single_version=True, filter_versions=True, jaccard=True)
     # print_libraries("requirements_history.txt", "RyanBalfanz_django-sendgrid/2012-11-21",
     #                 True, True, {"idf_power": -1, "sim_power": 1.5, "num_closest": 1}, 10)
     # cluster_vectors(file="requirements_history.txt", algo="kmeans")
-    # visualize_clusters(file="requirements_history.txt", mode="versions")
+    visualize_clusters(file="libraries_of_requirements_history.txt_libraries", mode="clusters")
     # analyze_pilgrims(file="requirements_history.txt", n_show=10)
     # years_requirements(file="requirements_history.txt")
     pass

@@ -1,4 +1,6 @@
-# Processing raw data, building and training models, suggesting closest projects.
+"""
+Processing raw data, building and training models, suggesting closest projects.
+"""
 
 from collections import Counter, defaultdict
 from math import log
@@ -57,20 +59,22 @@ def read_dependencies() -> Dict[str, List[str]]:
     """
     Read the file with the dependencies and return a dictionary with repos as keys
     and lists of their dependencies as values. Automatically considers the lower- and upppercase,
-    and exchanges "-" to "_".
+    and replaces "-" with "_".
     :return: dictionary {repo: [dependencies], ...}
     """
     reqs = {}
     with open(f"processed/requirements_history.txt") as fin:
         for line in fin:
             data = line.rstrip().split(";")
-            reqs[data[0]] = [req.split(":")[0].lower().replace("-", "_") for req in data[1].split(",")]
+            reqs[data[0]] = [req.split(":")[0].lower().replace("-", "_") for req in
+                             data[1].split(",")]
     return reqs
 
 
-def jaccard_distance(file: str) -> None:
+def jaccard_distance() -> None:
     """
-    :param file: name of the file, not the full path.
+    Calculates the Jaccard distances for all the repos, save the pre-calculated distances
+    as a NumPy file.
     :return: None.
     """
     reqs = read_dependencies()
@@ -80,17 +84,18 @@ def jaccard_distance(file: str) -> None:
         repo1reqs = set(reqs[repo1])
         for index2, repo2 in enumerate(reqs):
             repo2reqs = set(reqs[repo2])
-            matrix[index1][index2] = len(repo1reqs.intersection(repo2reqs))/len(repo1reqs.union(repo2reqs))
-    np.save(f"models/{file}_jaccard", matrix)
-    np.savetxt(f"models/{file}_jaccard.csv", matrix, delimiter=",")
+            matrix[index1][index2] = len(repo1reqs.intersection(repo2reqs)) / len(
+                repo1reqs.union(repo2reqs))
+    np.save(f"models/jaccard", matrix)
 
 
-def train_svd(file: str, libraries: bool) -> None:
+def train_svd(libraries: bool) -> None:
     """
     Create a project-dependencies matrix and train an SVD (singular vector decomposition)
-    that will transform the lines into 32-metric embeddings.
-    :param file: name of the file, not the full path.
-    :param libraries: if True, will create embeddings of libraries by projects.
+    that will transform the lines into 32-metric embeddings. Can create embeddings for
+    projects directly or as average of libraries.
+    :param libraries: if True, will use the embeddings of libraries, save them,
+    and calculate embeddings of projects as their average.
     :return: None.
     """
     # Get the dictionary from projects to dependencies.
@@ -121,41 +126,45 @@ def train_svd(file: str, libraries: bool) -> None:
     svd = TruncatedSVD(n_components=32, n_iter=7)
 
     if libraries is True:
-        name = "libraries_of_" + file
-        matrix = np.transpose(matrix)
+        matrix = np.transpose(matrix)  # Transposing the matrix
         print(f"The shape of the transposed matrix is {matrix.shape}.")
-        libraries_matrix = svd.fit_transform(matrix)
+        libraries_matrix = svd.fit_transform(matrix)  # Training libraries embeddings
         print(f"The shape of the SVD matrix is {libraries_matrix.shape}.")
-        np.save(f"models/{name}_libraries", libraries_matrix)
-        np.savetxt(f"models/{name}_libraries.csv", libraries_matrix, delimiter=",")
+        np.save(f"models/libraries_embeddings", libraries_matrix)  # Saving them
+        np.savetxt(f"models/libraries_embeddings.csv", libraries_matrix, delimiter=",")
+
+        # Saving the libraries in correct order, to make sense of embeddings
+        with open(f"models/libraries_embeddings_dependencies.txt", "w+") as fout:
+            for dependency in dependency_list:
+                fout.write(f"{dependency}\n")
+
         new_matrix = []
         for repo in repos_list:
             repo_vectors = []
-            for req in reqs[repo]:
+            for req in reqs[repo]:  # Gathering a list of libraries embeddings for a repo
                 repo_vectors.append(libraries_matrix[dependency_list.index(req)])
-            new_matrix.append(np.average(repo_vectors, axis=0))
-        new_matrix = np.array(new_matrix)
-        np.save(f"models/{name}", new_matrix)
-        np.savetxt(f"models/{name}.csv", new_matrix, delimiter=",")
-        with open(f"models/{name}_dependencies", "w+") as fout:
-            for dependency in dependency_list:
-                fout.write(f"{dependency}\n")
-    else:
-        name = file
-        new_matrix = svd.fit_transform(matrix)
-        np.save(f"models/{name}", new_matrix)
-        np.savetxt(f"models/{name}.csv", new_matrix, delimiter=",")
+            new_matrix.append(np.average(repo_vectors, axis=0))  # Averaging them
 
-    # Save the list of projects in correct order.
-    with open(f"models/{name}_repos", "w+") as fout:
+        new_matrix = np.array(new_matrix)
+        np.save(f"models/repos_by_libraries_embeddings", new_matrix)  # Saving the embeddings
+        np.savetxt(f"models/repos_by_libraries_embeddings.csv", new_matrix, delimiter=",")
+
+    else:
+        new_matrix = svd.fit_transform(matrix)  # Directly get the embeddings of projects
+        np.save(f"models/repos_direct_embeddings", new_matrix)
+        np.savetxt(f"models/repos_direct_embeddings.csv", new_matrix, delimiter=",")
+
+    # Saving the list of projects in correct order.
+    with open(f"models/repos_list.txt", "w+") as fout:
         for repo in repos_list:
             fout.write(f"{repo}\n")
 
-    # Save the IDFs of the dependencies.
-    with open(f"models/{name}_idfs", "w+") as fout:
+    # Saving the IDFs of the dependencies.
+    with open(f"models/idfs.txt", "w+") as fout:
         for dependency in dependency_counter:
             fout.write(f"{dependency[0]};"
                        f"{round(log(len(repos_list) / dependency[1]), 3)}\n")
+
     print(f"SVD trained and saved. The new shape of the matrix is {new_matrix.shape}.")
 
 
@@ -179,138 +188,199 @@ def get_year(repo_name: str) -> str:
     return get_date(repo_name).split('-')[0]
 
 
-def predict_closest(file: str, names: List[str], amount: int, single_version: bool,
-                    filter_versions: bool, jaccard: bool) -> Dict[str, List[Tuple[str, str, float]]]:
+def predict_closest_by_jaccard(names: List[str], amount: int, single_version: bool,
+                               filter_versions: bool) -> Dict[str, List[Tuple[str, str, float]]]:
     """
-    Given the list of names of projects, find the closest to them in the embedding space,
-    and return them.
-    :param file: name of the file, not the full path.
+    Given the list of names of projects, find the closest to them by Jaccard similarity.
     :param names: a list of full repo names that must be searched.
     :param amount: number of the closest repos to find for each query project.
     :param single_version: if True, will only consider the repos of the same version as query.
     :param filter_versions: if True, only the closest version of any repo will be in the output.
-    :param jaccard: if True, use Jaccard similarity instead of any embeddings.
     :return: dictionary {repo: [(close_repo, version, similarity), ...]}.
     """
+    closest = defaultdict(list)
+    # Load pre-calculated Jaccard distances
+    data = np.load(f"models/jaccard.npy")
+
+    # Load the names of repos
     repos_list = []
-    with open(f"models/{file}_repos") as fin:
+    with open(f"models/repos_list.txt") as fin:
         for line in fin:
             repos_list.append(line.rstrip())
 
-    closest = defaultdict(list)
-
-    if jaccard is False:
-        data = np.load(f"models/{file}.npy")
-        data = data.astype(np.float32)
-        repos_list = np.array(repos_list)
-
-        if single_version:
-            target_year = get_year(names[0])
-            picked_repos = [
-                i
-                for i, repo_name in enumerate(repos_list)
-                if get_year(repo_name) == target_year
-            ]
-            data = data[picked_repos]
-            repos_list = repos_list[picked_repos]
-
-        index = build_index(data)
-
-        # Build query embeddings of query projects
-        query_indices = [np.where(repos_list == name)[0][0] for name in names]
-        query_embedding = data[query_indices]
-        faiss.normalize_L2(query_embedding)
-        all_distances, all_indices = index.search(query_embedding, len(data))
-
-        # Iterating over query projects.
-        for query_ind, distances, indices in zip(query_indices, all_distances, all_indices):
-            # Post-process all the repos.
-            query_repo_full_name = repos_list[query_ind]
-            query_repo_name = get_name(query_repo_full_name)
-
-            banned = {query_repo_name}
-            for dist, ind in zip(distances, indices):
-                repo_full_name = repos_list[ind]
-                repo_name = get_name(repo_full_name)
-                repo_date = get_date(repo_full_name)
-                if repo_name not in banned:
-                    closest[query_repo_full_name].append((
-                        repo_name,
-                        repo_date,
-                        dist
-                    ))
-                    if filter_versions and (not single_version):
-                        banned.add(repo_name)
-
-                if len(closest[query_repo_full_name]) >= amount:
-                    break
-    else:
-        data = np.load(f"models/{file}_jaccard.npy")
-        for name in names:
-            lst = [(x, y) for x, y in zip(repos_list, data[repos_list.index(name)])]
-            lst = sorted(lst, key=itemgetter(1, 0), reverse=True)
-            repo_name = get_name(name)
-            repo_date = get_date(name)
-            banned = {repo_name}
-            for candidate in lst:
-                if candidate[1] == 1:
-                    continue # Skip exactly the same cases, they are of no interest
-                candidate_name = get_name(candidate[0])
-                candidate_date = get_date(candidate[0])
-                if single_version and (repo_date != candidate_date):
-                    continue
-                if candidate_name in banned:
-                    continue
-                closest[name].append((
-                    candidate_name,
-                    candidate_date,
-                    candidate[1]
-                ))
-                if filter_versions and (not single_version):
-                    banned.add(candidate_name)
-                if len(closest[name]) >= amount:
-                    break
+    # Iterate over query projects
+    for query_full_name in names:
+        # Get a list of tuples (repo, Jaccard similarity to query repo)
+        lst = [(x, y) for x, y in zip(repos_list, data[repos_list.index(query_full_name)])]
+        lst = sorted(lst, key=itemgetter(1, 0), reverse=True)  # Sort by Jaccard
+        query_name = get_name(query_full_name)
+        query_date = get_date(query_full_name)
+        banned = {query_name}
+        for candidate in lst:
+            if candidate[1] == 1:
+                continue  # Skip exactly the same cases, they are of no interest
+            candidate_name = get_name(candidate[0])
+            candidate_date = get_date(candidate[0])
+            if single_version and (query_date != candidate_date):
+                continue  # Skip the projects from another version if necessary
+            if candidate_name in banned:
+                continue  # Skip banned
+            closest[query_full_name].append((
+                candidate_name,
+                candidate_date,
+                candidate[1]
+            ))
+            if filter_versions and (not single_version):
+                banned.add(candidate_name)  # If only one version per repo, skip further versions
+            if len(closest[query_full_name]) >= amount:
+                break  # If enough candidates are gathered, stop the process
     return closest
 
 
-def print_closest(file: str, name: str, amount: int,
-                  single_version: bool, filter_versions: bool, jaccard: bool) -> None:
+def predict_closest_by_embedding(file: str, names: List[str], amount: int, single_version: bool,
+                                 filter_versions: bool) -> Dict[str, List[Tuple[str, str, float]]]:
+    """
+    Given the list of names of projects, find the closest to them in the embedding space,
+    and return them.
+    :param file: the path to the file with the embedding.
+    :param names: a list of full repo names that must be searched.
+    :param amount: number of the closest repos to find for each query project.
+    :param single_version: if True, will only consider the repos of the same version as query.
+    :param filter_versions: if True, only the closest version of any repo will be in the output.
+    :return: dictionary {repo: [(close_repo, version, similarity), ...]}.
+    """
+    closest = defaultdict(list)
+    # Load the embeddings and transform them to the necessary format
+    data = np.load(file)
+    data = data.astype(np.float32)
+
+    # Load the names of repos
+    repos_list = []
+    with open("models/repos_list.txt") as fin:
+        for line in fin:
+            repos_list.append(line.rstrip())
+    repos_list = np.array(repos_list)
+
+    if single_version:  # Filter only the current version for the index
+        target_year = get_year(names[0])
+        picked_repos = [
+            i
+            for i, repo_name in enumerate(repos_list)
+            if get_year(repo_name) == target_year
+        ]
+        data = data[picked_repos]  # Filter the embeddings
+        repos_list = repos_list[picked_repos]  # Filter the list of the projects
+
+    index = build_index(data)
+
+    # Build query embeddings of query projects
+    query_indices = [np.where(repos_list == name)[0][0] for name in names]
+    query_embedding = data[query_indices]
+    faiss.normalize_L2(query_embedding)
+    all_distances, all_indices = index.search(query_embedding, len(data))
+
+    # Iterating over query projects.
+    for query_ind, distances, indices in zip(query_indices, all_distances, all_indices):
+        # Post-process all the repos.
+        query_repo_full_name = repos_list[query_ind]
+        query_repo_name = get_name(query_repo_full_name)
+
+        banned = {query_repo_name}
+        for dist, ind in zip(distances, indices):
+            repo_full_name = repos_list[ind]
+            repo_name = get_name(repo_full_name)
+            repo_date = get_date(repo_full_name)
+            if repo_name not in banned:
+                closest[query_repo_full_name].append((
+                    repo_name,
+                    repo_date,
+                    dist
+                ))
+                if filter_versions and (not single_version):
+                    banned.add(repo_name)  # If only one version per repo, skip further versions
+
+            if len(closest[query_repo_full_name]) >= amount:
+                break  # If enough candidates are gathered, stop the process
+    return closest
+
+
+def predict_closest(mode: str, names: List[str], amount: int, single_version: bool,
+                    filter_versions: bool) -> Dict[str, List[Tuple[str, str, float]]]:
+    """
+    Given the list of names of projects, find the closest to them by a given method.
+    :param mode: "repos_direct" for using direct embeddings of repos.
+                 "repos_by_libraries" for using embeddings of repos as average of libraries.
+                 "jaccard" for using Jaccard similarity.
+    :param names: a list of full repo names that must be searched.
+    :param amount: number of the closest repos to find for each query project.
+    :param single_version: if True, will only consider the repos of the same version as query.
+    :param filter_versions: if True, only the closest version of any repo will be in the output.
+    :return: dictionary {repo: [(close_repo, version, similarity), ...]}.
+    """
+    if mode == "repos_direct":
+        return predict_closest_by_embedding(file="models/repos_direct_embeddings.npy",
+                                            names=names, amount=amount,
+                                            single_version=single_version,
+                                            filter_versions=filter_versions)
+    elif mode == "repos_by_libraries":
+        return predict_closest_by_embedding(file="models/repos_by_libraries_embeddings.npy",
+                                            names=names, amount=amount,
+                                            single_version=single_version,
+                                            filter_versions=filter_versions)
+    elif mode == "jaccard":
+        return predict_closest_by_jaccard(names=names, amount=amount,
+                                          single_version=single_version,
+                                          filter_versions=filter_versions)
+    else:
+        print("Wrong mode of predicting closest!")
+
+
+def print_closest(mode: str, name: str, amount: int, single_version: bool,
+                  filter_versions: bool) -> None:
     """
     Run the `predict_closest` function and print the results.
-    :param file: name of the file, not the full path.
+    :param mode: "repos_direct" for using direct embeddings of repos.
+                 "repos_by_libraries" for using embeddings of repos as average of libraries.
+                 "jaccard" for using Jaccard similarity.
     :param name: full repo name that must be searched.
     :param amount: number of the closest repos to find for each query project.
     :param single_version: if True, will only consider the repos of the same version as query.
     :param filter_versions: if True, only the closest version of any repo will be in the output.
-    :param jaccard: if True, use Jaccard similarity instead of any embeddings.
     :return: None.
     """
-    closest = predict_closest(file, [name], amount, single_version, filter_versions, jaccard)[name]
+    print(f"Target repo: {name}")
+    print("Closest repos:\n")
+    closest = predict_closest(mode=mode, names=[name], amount=amount,
+                              single_version=single_version, filter_versions=filter_versions)[name]
     for repo in closest:
         print(repo[0], repo[1], repo[2])
 
 
-def suggest_libraries(file: str, names: List[str], single_version: bool, jaccard: bool,
+def suggest_libraries(mode: str, names: List[str], single_version: bool,
                       config: Dict[str, Union[float, int]]) -> Dict[str, List[Tuple[str, float]]]:
     """
     Given a list of query projects, suggests potential libraries for all of them.
-    :param file: name of the file, not the full path.
+    :param mode: "repos_direct" for using direct embeddings of repos.
+                 "repos_by_libraries" for using embeddings of repos as average of libraries.
+                 "jaccard" for using Jaccard similarity.
     :param names: a list of full repo names that must be searched.
     :param single_version: if True, will only consider the repos of the same version as query.
-    :param jaccard: if True, use Jaccard similarity instead of any embeddings.
-    :param config: the power of IDF in the recommendation formula.
+    :param config: dictionary with the necessary parameters: sim_power, idf_power, and num_closest.
     :return: dictionary {repo: [(suggestion, count), ...]}.
     """
     # Upload the dependencies and their IDFs.
     reqs = read_dependencies()
     idfs = {}
-    with open(f"models/{file}_idfs") as fin:
+    with open(f"models/idfs.txt") as fin:
         for line in fin:
             data = line.rstrip().split(";")
             idfs[data[0]] = float(data[1])
+
     suggestions = {}
+
     # Find the closest repos for all the repos (faster to do in bulk).
-    closest = predict_closest(file, names, config['num_closest'], single_version, True, jaccard)
+    closest = predict_closest(mode=mode, names=names, amount=config['num_closest'],
+                              single_version=single_version, filter_versions=True)
 
     for name in names:  # Iterate over query repos.
         libraries = defaultdict(float)
@@ -326,20 +396,22 @@ def suggest_libraries(file: str, names: List[str], single_version: bool, jaccard
     return suggestions
 
 
-def print_libraries(file: str, name: str, single_version: bool, jaccard: bool,
+def print_libraries(mode: str, name: str, single_version: bool,
                     config: Dict[str, Union[float, int]], n_suggest: int) -> None:
     """
     Run the `suggest_libraries` function and print the result.
-    :param file: name of the file, not the full path.
-    :param name: full repo name that must be searched.
+    :param mode: "repos_direct" for using direct embeddings of repos.
+                 "repos_by_libraries" for using embeddings of repos as average of libraries.
+                 "jaccard" for using Jaccard similarity.
+    :param name: the full name of the repo that must be searched.
     :param single_version: if True, will only consider the repos of the same version as query.
-    :param jaccard: if True, use Jaccard similarity instead of any embeddings.
-    :param config: the power of IDF in the recommendation formula.
+    :param config: dictionary with the necessary parameters: sim_power, idf_power, and num_closest.
     :param n_suggest: number of top libraries to suggest.
     :return: None.
     """
     reqs = read_dependencies()
-    suggestions = suggest_libraries(file, [name], single_version, jaccard, config)[name][:n_suggest]
+    suggestions = suggest_libraries(mode=mode, names=[name], single_version=single_version,
+                                    config=config)[name][:n_suggest]
     print(f"Repo name: {name}\n"
           f"Repo dependencies: {', '.join(reqs[name])}\n\n"
           f"Suggestions:\n")
@@ -347,14 +419,15 @@ def print_libraries(file: str, name: str, single_version: bool, jaccard: bool,
         print(f"{suggestion[0]}, score: {suggestion[1]}")
 
 
-def cluster_vectors(file: str, algo: str) -> None:
+def cluster_vectors(input_file: str, algo: str, output_file: str) -> None:
     """
     Cluster the embeddings using a certain algorithm and save the obtained labels.
-    :param file: name of the file, not the full path.
+    :param input_file: path to the file with embeddings that must be clustered.
     :param algo: "dbscan" or "kmeans".
+    :param output_file: path to the output file with clusters and their 2D coordinates.
     :return: None.
     """
-    data = np.load(f"models/{file}.npy")
+    data = np.load(input_file)
     # Cluster the embeddings using the given algorithm.
     if algo == "dbscan":
         clustering = DBSCAN(eps=0.15, min_samples=3, metric='cosine').fit(data)
@@ -368,40 +441,43 @@ def cluster_vectors(file: str, algo: str) -> None:
     # Run t-SNE to downscale the data into two dimensions.
     data_downscaled = TSNE(n_components=2).fit_transform(data)
     print(f"The shape of TSNE matrix is {data_downscaled.shape}.")
-    with open(f"models/{file}_clusters", "w+") as fout:
+
+    with open(output_file, "w+") as fout:
         for index_repo, label in enumerate(labels):
             # Save the label from the original clustering and 2D coordinates from t-SNE.
             fout.write(f"{label};{data_downscaled[index_repo][0]};"
                        f"{data_downscaled[index_repo][1]}\n")
 
 
-def visualize_clusters(file: str, mode: str) -> None:
+def visualize_clusters(input_file: str, mode: str) -> None:
     """
     Visualize the obtained clusterings either by clusters or by versions.
-    :param file: name of the file, not the full path.
+    :param input_file: path to the files with clusters.
     :param mode: "clusters" for differentiate clusters by color, "versions" for versions.
     :return: None
     """
     matrix = []
     labels = []
     # Upload the saved labels and coordinates of clusters.
-    with open(f"models/{file}_clusters") as fin:
+    with open(input_file) as fin:
         for line in fin:
             data = line.rstrip().split(";")
             matrix.append([float(data[1]), float(data[2])])
             labels.append(int(data[0]))
     matrix = np.asarray(matrix)
-    if mode == "clusters":
+
+    if mode == "clusters":  # This mode works for anything, including libraries.
         matrix = np.flip(matrix, 0)
         labels = np.flip(labels, 0)
         plt.scatter(matrix[:, 0], matrix[:, 1], c=labels, s=50)
         plt.title(f"Number of clusters: {len(set(labels))}")
-    else:
+
+    else:  # "Versions" mode will only work for clusters of versioned projects.
         matrix = np.flip(matrix, 0)
         versions_dict = {}
         versions = []
         # Create an ordered version of different numbers to color different versions.
-        with open(f"models/{file}_repos") as fin:
+        with open("models/repos_list.txt") as fin:
             for line in fin:
                 version = line.rstrip().split("/")[1]
                 if version not in versions_dict:
@@ -416,16 +492,16 @@ def visualize_clusters(file: str, mode: str) -> None:
     plt.show()
 
 
-def analyze_pilgrims(file: str, n_show: int) -> None:
+def analyze_pilgrims(input_file: str, n_show: int) -> None:
     """
     Given a matrix, study the projects that shifted the most between versions.
-    :param file: name of the file, not the full path.
+    :param input_file: path to the file with embeddings.
     :param n_show: number of pilgrims to show.
     :return: None.
     """
-    data = np.load(f"models/{file}.npy")
+    data = np.load(input_file)
     repos = []
-    with open(f"models/{file}_repos") as fin:
+    with open("models/repos_list.txt") as fin:
         for line in fin:
             repos.append(line.rstrip())
     # Transform a list of full names into a dictionary from repo to all of its versions.
@@ -467,10 +543,9 @@ def analyze_pilgrims(file: str, n_show: int) -> None:
         print(poles_distances[i][0], poles_distances[i][1], poles_distances[i][2])
 
 
-def years_requirements(file: str) -> None:
+def years_requirements() -> None:
     """
     Save the most popular requirement for each year separately.
-    :param file: name of the file, not the full path.
     :return: None.
     """
     reqs = read_dependencies()
@@ -483,20 +558,23 @@ def years_requirements(file: str) -> None:
     for year in years:
         years[year] = [x[0] for x in sorted(Counter(years[year]).items(),
                                             key=itemgetter(1, 0), reverse=True)]
-    with open(f"dynamics/{file}_years", "w+") as fout:
+    with open("dynamics/years.txt", "w+") as fout:
         for year in years:
             fout.write(f"{year};{','.join(years[year])}\n")
 
 
 if __name__ == "__main__":
-    # jaccard_distance(file="requirements_history.txt")
-    # train_svd(file="requirements_history.txt", libraries=False)
-    # print_closest(file="requirements_history.txt", name="RyanBalfanz_django-sendgrid/2012-11-21",
-    #               amount=20, single_version=True, filter_versions=True, jaccard=True)
-    # print_libraries("requirements_history.txt", "RyanBalfanz_django-sendgrid/2012-11-21",
-    #                 True, True, {"idf_power": -1, "sim_power": 1.5, "num_closest": 1}, 10)
-    # cluster_vectors(file="requirements_history.txt", algo="kmeans")
-    visualize_clusters(file="libraries_of_requirements_history.txt_libraries", mode="clusters")
-    # analyze_pilgrims(file="requirements_history.txt", n_show=10)
-    # years_requirements(file="requirements_history.txt")
+    jaccard_distance()  # Takes a long time to pre-calculate Jaccard distances
+    train_svd(libraries=False)  # Train direct project embeddings
+    train_svd(libraries=True)  # Train libraries embeddings + projects as their average
+    # print_closest(mode="repos_direct", name="RyanBalfanz_django-sendgrid/2012-11-21",
+    #               amount=20, single_version=True, filter_versions=True)
+    # print_libraries(mode="repos_direct", name="RyanBalfanz_django-sendgrid/2012-11-21",
+    #                 single_version=True,
+    #                 config={"idf_power": -1, "sim_power": 1.5, "num_closest": 200}, n_suggest=10)
+    # cluster_vectors(input_file="models/repos_direct_embeddings.npy", algo="kmeans",
+    #                 output_file="models/repos_direct_embeddings_clusters.txt")
+    # visualize_clusters(input_file="models/repos_direct_embeddings_clusters.txt", mode="clusters")
+    # analyze_pilgrims(input_file="models/repos_direct_embeddings.npy", n_show=10)
+    years_requirements()
     pass

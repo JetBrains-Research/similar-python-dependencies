@@ -13,7 +13,9 @@ import seaborn as sns
 from sklearn.metrics.pairwise import cosine_similarity
 from tqdm import tqdm
 
-from analysis import read_dependencies, suggest_libraries, get_year
+from src.predictions.predict_dependencies import suggest_libraries
+from src.preprocessing.preprocess import read_dependencies
+from src.utils import get_year
 
 
 def get_configs() -> List[Dict[str, Union[float, int]]]:

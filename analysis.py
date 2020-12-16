@@ -419,7 +419,7 @@ def print_libraries(mode: str, name: str, single_version: bool,
         print(f"{suggestion[0]}, score: {suggestion[1]}")
 
 
-def cluster_vectors(input_file: str, algo: str, output_file: str) -> None:
+def cluster_vectors(input_file: str, algo: str, output_file: str, normalize: bool = True) -> None:
     """
     Cluster the embeddings using a certain algorithm and save the obtained labels.
     :param input_file: path to the file with embeddings that must be clustered.
@@ -428,6 +428,8 @@ def cluster_vectors(input_file: str, algo: str, output_file: str) -> None:
     :return: None.
     """
     data = np.load(input_file)
+    if normalize:
+        data /= np.linalg.norm(data, axis=1, keepdims=True)
     # Cluster the embeddings using the given algorithm.
     if algo == "dbscan":
         clustering = DBSCAN(eps=0.15, min_samples=3, metric='cosine').fit(data)

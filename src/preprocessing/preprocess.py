@@ -1,8 +1,9 @@
 from collections import Counter, defaultdict
 from operator import itemgetter
 import os
-from typing import Dict, List
+from typing import Dict, List, Optional
 
+import numpy as np
 import requirements
 
 
@@ -58,6 +59,32 @@ def read_dependencies() -> Dict[str, List[str]]:
     return reqs
 
 
+def read_idfs() -> Dict[str, float]:
+    idfs = {}
+    with open(f"models/idfs.txt") as fin:
+        for line in fin:
+            data = line.rstrip().split(";")
+            idfs[data[0]] = float(data[1])
+    return idfs
+
+
+def read_repo_list() -> np.ndarray:
+    repos_list = []
+    with open("models/repos_list.txt") as fin:
+        for line in fin:
+            repos_list.append(line.rstrip())
+    repos_list = np.array(repos_list)
+    return repos_list
+
+
+def read_library_names() -> List[str]:
+    return [line.strip() for line in open("models/libraries_embeddings_dependencies.txt")]
+
+
+def read_library_embeddings() -> np.ndarray:
+    return np.load('models/libraries_embeddings.npy')
+
+
 def years_requirements() -> None:
     """
     Save the most popular requirement for each year separately.
@@ -76,3 +103,13 @@ def years_requirements() -> None:
     with open("dynamics/years.txt", "w+") as fout:
         for year in years:
             fout.write(f"{year};{','.join(years[year])}\n")
+
+
+def project_to_library_embedding(dependencies: List[str]) -> Optional[np.ndarray]:
+    known_libraries = read_library_names()
+    library_embeddings = read_library_embeddings()
+    inds = [known_libraries.index(dep) for dep in dependencies if dep in known_libraries]
+    if len(inds) == 0:
+        return None
+    embedding = library_embeddings[inds].mean(axis=0)
+    return embedding / np.linalg.norm(embedding)

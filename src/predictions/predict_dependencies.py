@@ -1,10 +1,12 @@
+import numpy as np
+
 from collections import defaultdict
 from operator import itemgetter
-from typing import Dict, List, Tuple, Union
+from typing import Dict, List, Tuple, Union, Optional
 
 from src.predictions.embedding import predict_closest_by_embedding
 from src.predictions.jaccard import predict_closest_by_jaccard
-from src.preprocessing.preprocess import read_dependencies
+from src.preprocessing.preprocess import read_dependencies, read_idfs, read_repo_list
 
 
 def predict_closest_from_lib_list(mode: str, libs: List[List[str]], amount: int, single_version: bool,
@@ -50,6 +52,34 @@ def predict_closest(mode: str, names: List[str], amount: int, single_version: bo
         print("Wrong mode of predicting closest!")
 
 
+def suggest_libraries_from_predictions(
+        config: Dict[str, Union[float, int]],
+        predictions: List[Tuple[int, float]],
+        query_libraries: List[str],
+        reqs: Optional[Dict[str, List[str]]] = None,
+        idfs: Optional[Dict[str, float]] = None,
+        repos_list: Optional[np.ndarray] = None
+):
+    if reqs is None:
+        reqs = read_dependencies()
+    if idfs is None:
+        idfs = read_idfs()
+    if repos_list is None:
+        repos_list = read_repo_list()
+
+    libraries = defaultdict(float)
+    for closest_ind, dist in predictions:  # Iterate over the closest repos.
+        repo_name = repos_list[closest_ind]
+        for req in reqs[repo_name]:  # Iterate over dependencies.
+            if req not in query_libraries:  # Skip if the given requirement already in the query.
+                # Cosine distance to repo * IDF of lib
+                libraries[req] += (idfs[req] ** config['idf_power']) * \
+                                  (((dist + 1) / 2) ** config['sim_power'])
+
+    # Sort the suggestions by their score.
+    return list(sorted(libraries.items(), key=itemgetter(1, 0), reverse=True))
+
+
 def suggest_libraries(mode: str, names: List[str], single_version: bool,
                       config: Dict[str, Union[float, int]]) -> Dict[str, List[Tuple[str, float]]]:
     """
@@ -64,12 +94,7 @@ def suggest_libraries(mode: str, names: List[str], single_version: bool,
     """
     # Upload the dependencies and their IDFs.
     reqs = read_dependencies()
-    idfs = {}
-    with open(f"models/idfs.txt") as fin:
-        for line in fin:
-            data = line.rstrip().split(";")
-            idfs[data[0]] = float(data[1])
-
+    idfs = read_idfs()
     suggestions = {}
 
     # Find the closest repos for all the repos (faster to do in bulk).

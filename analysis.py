@@ -19,6 +19,13 @@ from sklearn.manifold import TSNE
 from tqdm import tqdm
 
 
+RANDOM_SEED = 42
+
+
+def fix_random_seed():
+    np.random.seed(RANDOM_SEED)
+
+
 def process_sources() -> None:
     """
     Parses through all the versious of requirements files, saves the processed version
@@ -123,7 +130,7 @@ def train_svd(libraries: bool) -> None:
         for req in reqs[repo]:
             matrix[index_repo, dependency_list.index(req)] = 1
 
-    svd = TruncatedSVD(n_components=32, n_iter=7)
+    svd = TruncatedSVD(n_components=32, n_iter=7, random_state=RANDOM_SEED)
 
     if libraries is True:
         matrix = np.transpose(matrix)  # Transposing the matrix
@@ -437,9 +444,9 @@ def cluster_vectors(input_file: str, algo: str, output_file: str) -> None:
         print(f"Clusters: {n_clusters_}, noise: {n_noise_}.")
     else:
         n_clusters = 64
-        labels = KMeans(n_clusters=n_clusters).fit_predict(data)
+        labels = KMeans(n_clusters=n_clusters, random_state=RANDOM_SEED).fit_predict(data)
     # Run t-SNE to downscale the data into two dimensions.
-    data_downscaled = TSNE(n_components=2).fit_transform(data)
+    data_downscaled = TSNE(n_components=2, random_state=RANDOM_SEED).fit_transform(data)
     print(f"The shape of TSNE matrix is {data_downscaled.shape}.")
 
     with open(output_file, "w+") as fout:
@@ -564,6 +571,7 @@ def years_requirements() -> None:
 
 
 if __name__ == "__main__":
+    fix_random_seed()
     jaccard_distance()  # Takes a long time to pre-calculate Jaccard distances
     train_svd(libraries=False)  # Train direct project embeddings
     train_svd(libraries=True)  # Train libraries embeddings + projects as their average

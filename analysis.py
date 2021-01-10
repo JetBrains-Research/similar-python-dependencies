@@ -2,22 +2,21 @@
 Processing raw data, building and training models, suggesting closest projects.
 """
 
+import os
 from collections import Counter, defaultdict
 from math import log
 from operator import itemgetter
-import os
 from typing import Dict, List, Tuple, Union
 
+import faiss
 import matplotlib.pyplot as plt
 import numpy as np
 import requirements
-import faiss
-from sklearn.decomposition import TruncatedSVD
-from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.cluster import DBSCAN, KMeans
+from sklearn.decomposition import TruncatedSVD
 from sklearn.manifold import TSNE
+from sklearn.metrics.pairwise import cosine_similarity
 from tqdm import tqdm
-
 
 RANDOM_SEED = 42
 
@@ -568,6 +567,48 @@ def years_requirements() -> None:
     with open("dynamics/years.txt", "w+") as fout:
         for year in years:
             fout.write(f"{year};{','.join(years[year])}\n")
+
+
+def read_dependencies() -> Dict[str, List[str]]:
+    """
+    Read the file with the dependencies and return a dictionary with repos as keys
+    and lists of their dependencies as values. Automatically considers the lower- and upppercase,
+    and replaces "-" with "_".
+    :return: dictionary {repo: [dependencies], ...}
+    """
+    reqs = {}
+    with open(f"processed/requirements_history.txt") as fin:
+        for line in fin:
+            data = line.rstrip().split(";")
+            reqs[data[0]] = [req.split(":")[0].lower().replace("-", "_") for req in
+                             data[1].split(",")]
+    return reqs
+
+
+def read_idfs() -> Dict[str, float]:
+    idfs = {}
+    with open(f"models/idfs.txt") as fin:
+        for line in fin:
+            data = line.rstrip().split(";")
+            idfs[data[0]] = float(data[1])
+    return idfs
+
+
+def read_repo_list() -> np.ndarray:
+    repos_list = []
+    with open("models/repos_list.txt") as fin:
+        for line in fin:
+            repos_list.append(line.rstrip())
+    repos_list = np.array(repos_list)
+    return repos_list
+
+
+def read_library_names() -> List[str]:
+    return [line.strip() for line in open("models/libraries_embeddings_dependencies.txt")]
+
+
+def read_library_embeddings() -> np.ndarray:
+    return np.load('models/libraries_embeddings.npy')
 
 
 if __name__ == "__main__":

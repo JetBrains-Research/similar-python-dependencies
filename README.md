@@ -16,11 +16,11 @@ Everything related to building of embeddings and using them for the recomendatio
 `analysis.py`. All the necessary functions are listed at the bottom of the file, and each function is fully documented. 
 
 The main function for bulding embeddings is the `train_svd` function, which has a single boolean parameter `libraries`:
-if `True`, the embeddings will be build for libraries and for projects as a mean of libraries; if `False`, 
-the embeddings will be created directly for the projects. The function `print_libraries` allows you to inference 
+if `True`, the embeddings will be built for libraries and for projects as a mean of libraries; if `False`, 
+the embeddings will be created directly for the projects. The function `print_libraries` allows you to inspect 
 suggestions for any repository in the dataset (see the commented out function at the bottom as an example). 
 
-Please note that for the sake of saving space, this repilcation package does not contrain the pre-calculated Jaccard
+Please note that for the sake of saving space, this repilcation package does not contain the pre-calculated Jaccard
 distances. To use the Jaccard model or to test it in the benchmark, you need to calculate them by running 
 the `jaccard_distance` function, however, this will take a rather long time and a lot of space.
 

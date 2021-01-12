@@ -613,14 +613,14 @@ def read_library_embeddings() -> np.ndarray:
 
 if __name__ == "__main__":
     fix_random_seed()
-    jaccard_distance()  # Takes a long time to pre-calculate Jaccard distances
+    # jaccard_distance()  # Takes a long time to pre-calculate Jaccard distances
     train_svd(libraries=False)  # Train direct project embeddings
     train_svd(libraries=True)  # Train libraries embeddings + projects as their average
-    # print_closest(mode="repos_direct", name="RyanBalfanz_django-sendgrid/2012-11-21",
+    # print_closest(mode="repos_by_libraries", name="RyanBalfanz_django-sendgrid/2012-11-21",
     #               amount=20, single_version=True, filter_versions=True)
-    # print_libraries(mode="repos_direct", name="RyanBalfanz_django-sendgrid/2012-11-21",
+    # print_libraries(mode="repos_by_libraries", name="RyanBalfanz_django-sendgrid/2012-11-21",
     #                 single_version=True,
-    #                 config={"idf_power": -1, "sim_power": 1.5, "num_closest": 200}, n_suggest=10)
+    #                 config={"idf_power": -1, "sim_power": 2, "num_closest": 500}, n_suggest=5)
     # cluster_vectors(input_file="models/repos_direct_embeddings.npy", algo="kmeans",
     #                 output_file="models/repos_direct_embeddings_clusters.txt")
     # visualize_clusters(input_file="models/repos_direct_embeddings_clusters.txt", mode="clusters")

@@ -330,10 +330,10 @@ if __name__ == "__main__":
     create_diffs()
     create_benchmark()
     # get_baseline()
-    run_benchmark(mode="repos_direct")
-    analyze_results(mode="repos_direct", output_file="benchmark/analysis/output.csv")
-    visualize_benchmark(input_file="benchmark/analysis/output.csv",
-                        varied_hyperparameters=["idf_power", "num_closest"],
-                        static_hyperparameters={"sim_power": 1.5},
-                        metric="mrr")
+    # run_benchmark(mode="repos_by_libraries")
+    # analyze_results(mode="repos_by_libraries", output_file="benchmark/analysis/output.csv")
+    # visualize_benchmark(input_file="benchmark/analysis/output.csv",
+    #                     varied_hyperparameters=["idf_power", "num_closest"],
+    #                     static_hyperparameters={"sim_power": 0},
+    #                     metric="mrr")
     pass

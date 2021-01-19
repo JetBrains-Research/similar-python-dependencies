@@ -12,6 +12,7 @@ import faiss
 import matplotlib.pyplot as plt
 import numpy as np
 import requirements
+from scipy.sparse import csr_matrix
 from sklearn.cluster import DBSCAN, KMeans
 from sklearn.decomposition import TruncatedSVD
 from sklearn.manifold import TSNE
@@ -120,14 +121,19 @@ def train_svd(libraries: bool) -> None:
     print(f"There are a total of {len(repos_list)} repositories "
           f"and {len(dependency_list)} dependencies.")
 
-    # Create an empty matrix of necessary size.
-    matrix = np.zeros((len(repos_list), len(dependency_list)))
-    print(f"The shape of the matrix for SVD is {matrix.shape}.")
+    repos_sparse_list = []
+    libraries_sparse_list = []
+    cooccurence_sparse_list = []
 
-    # Fill the matrix with 1's
     for index_repo, repo in enumerate(repos_list):
         for req in reqs[repo]:
-            matrix[index_repo, dependency_list.index(req)] = 1
+            repos_sparse_list.append(index_repo)
+            libraries_sparse_list.append(dependency_list.index(req))
+            cooccurence_sparse_list.append(1)
+
+    matrix = csr_matrix((cooccurence_sparse_list, (repos_sparse_list, libraries_sparse_list)),
+                        shape=(len(repos_list), len(dependency_list)))
+    print(f"The shape of the matrix for SVD is {matrix.shape}.")
 
     svd = TruncatedSVD(n_components=32, n_iter=7, random_state=RANDOM_SEED)
 
@@ -567,22 +573,6 @@ def years_requirements() -> None:
     with open("dynamics/years.txt", "w+") as fout:
         for year in years:
             fout.write(f"{year};{','.join(years[year])}\n")
-
-
-def read_dependencies() -> Dict[str, List[str]]:
-    """
-    Read the file with the dependencies and return a dictionary with repos as keys
-    and lists of their dependencies as values. Automatically considers the lower- and upppercase,
-    and replaces "-" with "_".
-    :return: dictionary {repo: [dependencies], ...}
-    """
-    reqs = {}
-    with open(f"processed/requirements_history.txt") as fin:
-        for line in fin:
-            data = line.rstrip().split(";")
-            reqs[data[0]] = [req.split(":")[0].lower().replace("-", "_") for req in
-                             data[1].split(",")]
-    return reqs
 
 
 def read_idfs() -> Dict[str, float]:
